@@ -1,0 +1,18 @@
+# Smoke-test config: proves the training loop runs correctly end to end on
+# this laptop's CPU, in well under a minute. NOT a real training run -- tiny
+# model, tiny data subset, few epochs. See configs/baseline.yaml for the
+# config intended for an actual Kaggle GPU run.
+json_path: data/MAGFiLO_1.0_Annotations_kaggle2026_train.json
+cache_dir: data/cache
+checkpoint_dir: outputs/smoke_test
+val_fraction: 0.15
+test_fraction: 0.15
+base_channels: 8      # tiny model, fast forward/backward on CPU
+batch_size: 2
+epochs: 2
+lr: 0.001
+num_workers: 0
+device: cpu
+limit_train: 8        # a handful of images only
+limit_val: 4
+seed: 0

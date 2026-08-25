@@ -1,0 +1,18 @@
+# A slightly larger smoke test: enough images and epochs to see whether the
+# model is learning something beyond memorising 8 images, while still
+# finishing in a few minutes on CPU. Still far too small to be a real
+# training run -- see configs/baseline.yaml for that.
+json_path: data/MAGFiLO_1.0_Annotations_kaggle2026_train.json
+cache_dir: data/cache
+checkpoint_dir: outputs/smoke_test_medium
+val_fraction: 0.15
+test_fraction: 0.15
+base_channels: 8
+batch_size: 2
+epochs: 8
+lr: 0.001
+num_workers: 0
+device: cpu
+limit_train: 60
+limit_val: 20
+seed: 0
