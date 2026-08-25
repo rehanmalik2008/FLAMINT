@@ -9,6 +9,17 @@ Deliberately does NOT attempt per-instance offset targets here (i.e. does not
 try to make each pixel point toward *its own* filament's spine when several
 filaments share a frame) -- see ``FilamentDataset``'s docstring for why, and
 ``tests/test_dataset.py`` for the multi-filament case this affects.
+
+PERFORMANCE NOTE (measured against real data in P0's audit): skeletonize and
+the Euclidean distance transform at full 2048x2048 resolution take on the
+order of a few seconds per image (7 real-image tests covering ~20 samples in
+``tests/test_dataset_real_data.py`` took 137s). That is much too slow to run
+live inside a training loop at any reasonable batch size. Before P1 training
+starts, spine/offset targets should be precomputed once per image (e.g. to a
+cached .npy alongside each JPEG, or generated at the training resolution --
+1024x1024 per the project plan -- rather than at full 2048x2048, which would
+also directly cut this cost roughly 4x). This module is correct as the
+reference implementation; it is not yet the fast path.
 """
 
 from __future__ import annotations
