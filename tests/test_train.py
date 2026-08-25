@@ -253,6 +253,112 @@ def test_train_writes_history_json(tmp_path):
     assert (ckpt_dir / "history.json").exists()
 
 
+def test_resume_continues_training_not_restarts(tmp_path):
+    """Train 4 epochs uninterrupted as the reference; separately train 2
+    epochs then resume for 2 more from last.pt.
+
+    The two runs are NOT expected to be bit-identical: `torch.manual_seed`
+    is called at the top of every `train()` call, so the resumed process's
+    DataLoader shuffling restarts from the same RNG stream rather than
+    continuing the uninterrupted run's stream -- batch order after the
+    resume point differs slightly, which is a separate, understood effect
+    unrelated to whether resume itself works correctly.
+
+    What resume is actually responsible for -- optimizer and LR-scheduler
+    state -- is checked exactly (the resumed run's learning rate at each
+    epoch must match the reference's, proving the scheduler picked up at
+    the right point rather than restarting) alongside a loose loss check
+    (proving training continued sensibly, not diverging or restarting from
+    the initial random weights).
+    """
+    json_path, cache_dir = make_tiny_project(tmp_path, n_images=8, size=32)
+
+    def base_cfg(ckpt_dir):
+        return TrainConfig(
+            json_path=str(json_path),
+            cache_dir=str(cache_dir),
+            checkpoint_dir=str(ckpt_dir),
+            val_fraction=0.25,
+            test_fraction=0.25,
+            base_channels=8,
+            batch_size=2,
+            lr=5e-3,
+            lr_step_epochs=2,
+            lr_gamma=0.5,
+            limit_train=4,
+            limit_val=2,
+            seed=0,
+        )
+
+    ref_dir = tmp_path / "ref"
+    cfg_ref = base_cfg(ref_dir)
+    cfg_ref.epochs = 4
+    result_ref = train(cfg_ref)
+
+    split_dir = tmp_path / "split"
+    cfg_first = base_cfg(split_dir)
+    cfg_first.epochs = 2
+    train(cfg_first)
+
+    cfg_second = base_cfg(split_dir)
+    cfg_second.epochs = 4
+    cfg_second.resume_from = str(split_dir / "last.pt")
+    result_split = train(cfg_second)
+
+    assert len(result_split["history"]) == 4
+    assert result_split["history"][-1]["epoch"] == 3
+
+    # The scheduler must have advanced exactly as far as the reference run's
+    # -- this is the actual thing "resume" is responsible for getting right.
+    ref_lrs = [row["lr"] for row in result_ref["history"]]
+    split_lrs = [row["lr"] for row in result_split["history"]]
+    assert split_lrs == ref_lrs
+
+    # Loss should be in the same ballpark, not restarted from scratch (a
+    # broken resume that silently reinitialised the model would produce a
+    # loss far higher than the reference's, not a few tenths of a percent
+    # off).
+    ref_final_loss = result_ref["history"][-1]["train"]["total"]
+    split_final_loss = result_split["history"][-1]["train"]["total"]
+    assert ref_final_loss == pytest.approx(split_final_loss, rel=0.05)
+
+
+def test_resume_preserves_history_from_before_the_break(tmp_path):
+    json_path, cache_dir = make_tiny_project(tmp_path, n_images=8, size=32)
+    ckpt_dir = tmp_path / "ckpt"
+
+    cfg1 = TrainConfig(
+        json_path=str(json_path), cache_dir=str(cache_dir),
+        checkpoint_dir=str(ckpt_dir), val_fraction=0.25, test_fraction=0.25,
+        base_channels=8, batch_size=2, epochs=2, limit_train=4, limit_val=2,
+    )
+    train(cfg1)
+
+    cfg2 = TrainConfig(
+        json_path=str(json_path), cache_dir=str(cache_dir),
+        checkpoint_dir=str(ckpt_dir), val_fraction=0.25, test_fraction=0.25,
+        base_channels=8, batch_size=2, epochs=3, limit_train=4, limit_val=2,
+        resume_from=str(ckpt_dir / "last.pt"),
+    )
+    result = train(cfg2)
+
+    # 2 epochs from the first run + 1 new epoch = 3 total, not 3 fresh ones.
+    assert len(result["history"]) == 3
+    assert [row["epoch"] for row in result["history"]] == [0, 1, 2]
+
+
+def test_resume_from_missing_file_raises_clear_error(tmp_path):
+    json_path, cache_dir = make_tiny_project(tmp_path, n_images=6, size=32)
+    cfg = TrainConfig(
+        json_path=str(json_path), cache_dir=str(cache_dir),
+        checkpoint_dir=str(tmp_path / "ckpt"), base_channels=8,
+        limit_train=3, limit_val=2, epochs=1,
+        resume_from=str(tmp_path / "does_not_exist.pt"),
+    )
+    with pytest.raises(FileNotFoundError):
+        train(cfg)
+
+
 def test_config_round_trips_through_yaml(tmp_path):
     cfg = TrainConfig(epochs=3, base_channels=16, lr=0.005)
     import yaml

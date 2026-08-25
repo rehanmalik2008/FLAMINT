@@ -71,6 +71,7 @@ class TrainConfig:
     limit_train: int | None = None  # debug: cap training set size
     limit_val: int | None = None
     seed: int = 0
+    resume_from: str | None = None  # path to a last.pt checkpoint to continue from
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> "TrainConfig":
@@ -174,6 +175,16 @@ def run_epoch(
 
 
 def train(cfg: TrainConfig) -> dict:
+    """Train, saving both a rolling `last.pt` (every epoch, full optimizer
+    state, for resuming) and `best.pt` (whenever val loss improves, model
+    weights only, for inference). Resuming from `cfg.resume_from` picks up
+    at the next epoch after the checkpoint, with the optimizer, scheduler,
+    and history all restored -- not a fresh restart with warm-started
+    weights. This matters specifically because GPU training sessions on
+    Kaggle's free tier can be killed by a session time limit mid-run; without
+    this, a multi-hour run interrupted partway would have to restart from
+    scratch rather than continue from where it left off.
+    """
     torch.manual_seed(cfg.seed)
     device = torch.device(cfg.device)
 
@@ -193,8 +204,28 @@ def train(cfg: TrainConfig) -> dict:
 
     history = []
     best_val_loss = float("inf")
+    start_epoch = 0
 
-    for epoch in range(cfg.epochs):
+    if cfg.resume_from:
+        resume_path = Path(cfg.resume_from)
+        checkpoint = torch.load(resume_path, map_location=device, weights_only=False)
+        model.load_state_dict(checkpoint["model_state"])
+        optimizer.load_state_dict(checkpoint["optimizer_state"])
+        scheduler.load_state_dict(checkpoint["scheduler_state"])
+        best_val_loss = checkpoint["best_val_loss"]
+        start_epoch = checkpoint["epoch"] + 1
+
+        history_path = checkpoint_dir / "history.json"
+        if history_path.exists():
+            with open(history_path, "r", encoding="utf-8") as f:
+                history = json.load(f)
+
+        print(
+            f"resumed from {resume_path} at epoch {start_epoch} "
+            f"(best_val_loss so far: {best_val_loss:.4f})"
+        )
+
+    for epoch in range(start_epoch, cfg.epochs):
         t0 = time.time()
         train_metrics = run_epoch(model, train_loader, criterion, device, optimizer)
         val_metrics = run_epoch(model, val_loader, criterion, device, None)
@@ -222,8 +253,24 @@ def train(cfg: TrainConfig) -> dict:
                 checkpoint_dir / "best.pt",
             )
 
-    with open(checkpoint_dir / "history.json", "w", encoding="utf-8") as f:
-        json.dump(history, f, indent=2)
+        # Rolling resume point: every epoch, unconditionally, with full
+        # optimizer/scheduler state -- distinct from best.pt, which only
+        # updates on improvement and intentionally omits optimizer state
+        # (best.pt is for inference, last.pt is for resuming a training run).
+        torch.save(
+            {
+                "model_state": model.state_dict(),
+                "optimizer_state": optimizer.state_dict(),
+                "scheduler_state": scheduler.state_dict(),
+                "config": asdict(cfg),
+                "epoch": epoch,
+                "best_val_loss": best_val_loss,
+            },
+            checkpoint_dir / "last.pt",
+        )
+
+        with open(checkpoint_dir / "history.json", "w", encoding="utf-8") as f:
+            json.dump(history, f, indent=2)
 
     return {"history": history, "best_val_loss": best_val_loss, "info": info}
 

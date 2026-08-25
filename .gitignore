@@ -18,3 +18,12 @@ dist/
 *.pth
 *.ckpt
 submission.csv
+
+# Scratch working directories used by the Kaggle-connected session when
+# pushing kernels/datasets to Kaggle (dataset-metadata.json, kernel-
+# metadata.json, and copies of source files staged for upload). These are
+# build artefacts of a separate tool operating in this same repo checkout,
+# not part of the source tree -- caught after a `git add -A` swept one in
+# along with a 46MB duplicated annotation JSON.
+/kaggle_dataset_push/
+/kaggle_kernel_push/

@@ -90,11 +90,24 @@ def main() -> None:
             "competition dataset or populate data/ manually first"
         )
     json_path = candidates[0]
+    checkpoint_dir = ROOT / "outputs" / "baseline_kaggle"
+
+    # Auto-resume: if a previous run in this same output directory left a
+    # last.pt (e.g. a prior kernel session that hit Kaggle's runtime limit
+    # mid-training), continue from it instead of restarting from scratch.
+    # This only helps if outputs/ persists across kernel runs (e.g. via a
+    # Kaggle Dataset used as both input and output) -- a from-scratch kernel
+    # checkout has nothing to resume from, and that's fine, this is a no-op
+    # in that case.
+    resume_path = checkpoint_dir / "last.pt"
+    resume_from = str(resume_path) if resume_path.exists() else None
+    if resume_from:
+        print(f"found existing checkpoint at {resume_path}, resuming")
 
     cfg = TrainConfig(
         json_path=str(json_path),
         cache_dir=str(LOCAL_DATA_DIR / "cache"),
-        checkpoint_dir=str(ROOT / "outputs" / "baseline_kaggle"),
+        checkpoint_dir=str(checkpoint_dir),
         val_fraction=0.15,
         test_fraction=0.15,
         base_channels=32,
@@ -102,6 +115,7 @@ def main() -> None:
         epochs=60,
         lr=1e-3,
         lr_step_epochs=20,
+        resume_from=resume_from,
         lr_gamma=0.5,
         num_workers=2,
         device=device,
