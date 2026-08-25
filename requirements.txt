@@ -14,6 +14,8 @@ pytest==9.0.2
 # resolve the matching CUDA build for the same torch==2.13.0 automatically).
 torch==2.13.0
 
+Pillow==12.2.0
+
 # Encoder pretraining and library segmentation heads, added when the
 # architecture ablations in P4 begin (not required by the current model).
 # timm
