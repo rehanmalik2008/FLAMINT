@@ -8,9 +8,13 @@ build/
 dist/
 
 # Data and artefacts are never committed; see README for how to fetch them.
-data/
-outputs/
-checkpoints/
+# Anchored to the repo root (leading slash) -- an unanchored "data/" also
+# matches src/filament/data/, which silently excluded the entire data
+# pipeline module from every commit until this was caught by a git-status
+# check during the P0 real-data audit. See the fix commit for the history.
+/data/
+/outputs/
+/checkpoints/
 *.pth
 *.ckpt
 submission.csv

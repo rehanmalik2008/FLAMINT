@@ -14,24 +14,26 @@ from filament.data.splits import assert_no_leakage, time_grouped_split
 
 
 def make_dataset(n_unique: int, duplicates_at: set[int] | None = None) -> MagfiloDataset:
-    """Build a synthetic dataset with `n_unique` distinct timestamps, evenly
-    spaced by one day, where `duplicates_at` indices get a second image id
-    for the same frame (simulating MAGFiLO's re-annotation duplicates)."""
+    """Build a synthetic dataset with `n_unique` distinct timestamps, where
+    `duplicates_at` indices get a second image id for the same frame
+    (simulating MAGFiLO's real re-annotation duplicates -- e.g. the real file
+    has "050101-...Lh", "050102-...Lh", "050103-...Lh" sharing one timestamp).
+    Image ids are strings, matching the real file's id format."""
     duplicates_at = duplicates_at or set()
-    images: dict[int, ImageRecord] = {}
-    next_id = 1
+    images: dict[str, ImageRecord] = {}
     for i in range(n_unique):
-        ts = f"201501{(i % 28) + 1:02d}120000"  # a fake but unique-per-i timestamp
-        # Ensure genuine lexicographic ordering across i by encoding i into
-        # the month/day/seconds fields distinctly.
+        # Encode i into the month/day fields distinctly so lexicographic
+        # order across i matches chronological order.
         ts = f"{2015 + i // 300:04d}{(i // 25) % 12 + 1:02d}{(i % 25) + 1:02d}120000"
         fname_a = f"{ts}Mh_a.jpg"
-        images[next_id] = ImageRecord(next_id, fname_a, 100, 100, ts)
-        next_id += 1
+        images[f"img-{ts}-a"] = ImageRecord(
+            f"img-{ts}-a", fname_a, 100, 100, date_captured=None, observation_key=ts
+        )
         if i in duplicates_at:
             fname_b = f"{ts}Mh_b.jpg"
-            images[next_id] = ImageRecord(next_id, fname_b, 100, 100, ts)
-            next_id += 1
+            images[f"img-{ts}-b"] = ImageRecord(
+                f"img-{ts}-b", fname_b, 100, 100, date_captured=None, observation_key=ts
+            )
 
     return MagfiloDataset(images=images, annotations_by_image={i: [] for i in images})
 
