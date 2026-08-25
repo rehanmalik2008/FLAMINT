@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+
+# Data and artefacts are never committed; see README for how to fetch them.
+data/
+outputs/
+checkpoints/
+*.pth
+*.ckpt
+submission.csv

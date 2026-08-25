@@ -1,0 +1,16 @@
+# Pinned runtime dependencies (required by the competition rules).
+# Versions are those verified by the test suite on Python 3.14.
+numpy==2.4.6
+scipy==1.18.0
+pandas==3.0.3
+scikit-image==0.26.0
+pycocotools==2.0.11
+
+# Test + tooling
+pytest==9.0.2
+
+# Model training (added in P1; pinned once a CUDA build is selected on Kaggle)
+# torch
+# timm
+# segmentation-models-pytorch
+# albumentations
